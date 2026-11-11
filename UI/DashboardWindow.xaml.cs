@@ -7,6 +7,8 @@ using System.Windows.Threading;
 using Microsoft.Extensions.Logging;
 using ZeroTouchLock.Configuration;
 using ZeroTouchLock.Core;
+using Color = System.Windows.Media.Color;
+using Point = System.Windows.Point;
 
 namespace ZeroTouchLock.UI;
 
@@ -431,7 +433,7 @@ public partial class DashboardWindow : Window
     {
         if (_lastFilteredRssi <= -99)
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 "No BLE signal received yet from target iPhone.\nPlease wait for a valid advertisement before calibrating.",
                 "Calibration Warning",
                 MessageBoxButton.OK,

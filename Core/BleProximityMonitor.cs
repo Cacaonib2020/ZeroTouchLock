@@ -66,7 +66,7 @@ public sealed class BleProximityMonitor : IDisposable
 
     private string? _resolvedTargetDeviceId;
     private string? _resolvedTargetDeviceName;
-    private Timer? _decayTimer;
+    private System.Threading.Timer? _decayTimer;
     private bool _disposed;
 
     // ANCS service UUID (Apple Notification Center Service)
@@ -127,7 +127,7 @@ public sealed class BleProximityMonitor : IDisposable
         }
 
         // 3. Start periodic decay evaluation timer (every 250ms)
-        _decayTimer = new Timer(OnDecayTimerTick, null, 500, 250);
+        _decayTimer = new System.Threading.Timer(OnDecayTimerTick, null, 500, 250);
     }
 
     /// <summary>
@@ -265,7 +265,7 @@ public sealed class BleProximityMonitor : IDisposable
                 return;
             }
 
-            bool isPaired = device.DeviceInformation.IsPaired;
+            bool isPaired = device.DeviceInformation.Pairing.IsPaired;
             string deviceId = device.DeviceId;
             string deviceName = device.Name;
 

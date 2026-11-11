@@ -13,7 +13,7 @@ namespace ZeroTouchLock;
 /// Application startup and lifecycle coordinator.
 /// Configures background system tray monitoring, dependency injection, and single-instance mutex.
 /// </summary>
-public partial class App : Application
+public partial class App : System.Windows.Application
 {
     private const string MutexName = @"Global\ZeroTouchLock_SingleInstance_Mutex_99812A";
     private Mutex? _mutex;
@@ -28,7 +28,7 @@ public partial class App : Application
         _mutex = new Mutex(true, MutexName, out bool isOnlyInstance);
         if (!isOnlyInstance)
         {
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 "Zero-Touch BLE Dynamic Lock is already running in the system tray.",
                 "ZeroTouchLock",
                 MessageBoxButton.OK,
@@ -121,7 +121,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             _logger.LogCritical(ex, "Fatal error during application startup.");
-            MessageBox.Show(
+            System.Windows.MessageBox.Show(
                 $"Fatal startup error: {ex.Message}",
                 "ZeroTouchLock Startup Error",
                 MessageBoxButton.OK,
