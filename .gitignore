@@ -1,0 +1,14 @@
+## Build & Output
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+## Test Results
+TestResults/
+*.trx
+
+## Temporary files
+*.tmp
+*.log

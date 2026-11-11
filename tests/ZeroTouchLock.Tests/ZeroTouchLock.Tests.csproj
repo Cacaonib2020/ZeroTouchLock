@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.6.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="../../Configuration/AppSettings.cs" Link="Configuration/AppSettings.cs" />
+    <Compile Include="../../Core/Contracts.cs" Link="Core/Contracts.cs" />
+    <Compile Include="../../Core/KalmanFilter1D.cs" Link="Core/KalmanFilter1D.cs" />
+    <Compile Include="../../Core/ProximityStateMachine.cs" Link="Core/ProximityStateMachine.cs" />
+    <Compile Include="../../Core/DistanceEstimator.cs" Link="Core/DistanceEstimator.cs" />
+  </ItemGroup>
+
+</Project>
