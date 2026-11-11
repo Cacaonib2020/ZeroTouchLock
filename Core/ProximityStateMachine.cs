@@ -39,6 +39,7 @@ public sealed class ProximityStateMachine
 
     private DateTime? _warningStartTime;
     private DateTime? _awayStartTime;
+    private DateTime? _sessionUnlockTime;
     private readonly object _syncLock = new();
 
     public ProximityState CurrentState
@@ -125,11 +126,40 @@ public sealed class ProximityStateMachine
                 return;
             }
 
+            // Post-Unlock Grace Period:
+            // When user unlocks the workstation, suppress all auto-locking for a grace window (default 10s)
+            // to allow BLE advertising packets to be received and GATT session to be re-established.
+            if (_sessionUnlockTime.HasValue)
+            {
+                TimeSpan elapsedSinceUnlock = now - _sessionUnlockTime.Value;
+                if (elapsedSinceUnlock.TotalMilliseconds < _thresholds.PostUnlockGraceMs)
+                {
+                    _warningStartTime = null;
+                    _awayStartTime = null;
+                    _gattDisconnectTime = null;
+
+                    if (_currentState != ProximityState.Present)
+                    {
+                        TransitionTo(ProximityState.Present,
+                            $"Post-unlock grace period ({elapsedSinceUnlock.TotalSeconds:F1}s / {_thresholds.PostUnlockGraceMs / 1000.0:F0}s)",
+                            estimatedRssi);
+                        StealthShieldDismissed?.Invoke(this, EventArgs.Empty);
+                    }
+                    return;
+                }
+                else
+                {
+                    _sessionUnlockTime = null;
+                    _logger.LogInformation("Post-unlock grace period ended. Normal proximity tracking active.");
+                }
+            }
+
             // 1. Check Present Condition: RSSI >= PresentRssiDbm (-68 dBm)
             if (estimatedRssi >= _thresholds.PresentRssiDbm)
             {
                 _warningStartTime = null;
                 _awayStartTime = null;
+                _gattDisconnectTime = null;
 
                 if (_currentState != ProximityState.Present)
                 {
@@ -139,10 +169,11 @@ public sealed class ProximityStateMachine
                 return;
             }
 
-            // 2. Check Away Condition: RSSI <= AwayRssiDbm (-78 dBm) or GATT disconnected >= 4.0s
+            // 2. Check Away Condition: RSSI <= AwayRssiDbm (-78 dBm) or GATT disconnected >= 5.0s
             bool isRssiAwayZone = estimatedRssi <= _thresholds.AwayRssiDbm;
             bool isGattDisconnectedTimeout = !_isGattConnected && _gattDisconnectTime.HasValue &&
-                                             (now - _gattDisconnectTime.Value).TotalMilliseconds >= 4000.0;
+                                             (now - _gattDisconnectTime.Value).TotalMilliseconds >= 5000.0 &&
+                                             estimatedRssi < _thresholds.PresentRssiDbm;
 
             if (isRssiAwayZone || isGattDisconnectedTimeout)
             {
@@ -235,8 +266,12 @@ public sealed class ProximityStateMachine
                 _isGattConnected = isConnected;
                 if (!isConnected)
                 {
-                    _gattDisconnectTime = now;
-                    _logger.LogWarning("GATT disconnected at {Time}. Disconnect timer started.", now);
+                    // Only start disconnect timer if session is unlocked and not in unlock grace period
+                    if (!_sessionMonitor.IsSessionLocked && !_sessionUnlockTime.HasValue)
+                    {
+                        _gattDisconnectTime = now;
+                        _logger.LogWarning("GATT disconnected at {Time}. Disconnect timer started.", now);
+                    }
                 }
                 else
                 {
@@ -264,6 +299,7 @@ public sealed class ProximityStateMachine
             {
                 _warningStartTime = null;
                 _awayStartTime = null;
+                _gattDisconnectTime = null;
                 TransitionTo(ProximityState.Present, "User resumed dynamic lock", -60);
             }
         }
@@ -275,14 +311,20 @@ public sealed class ProximityStateMachine
         {
             if (isLocked)
             {
+                _sessionUnlockTime = null;
+                _warningStartTime = null;
+                _awayStartTime = null;
                 TransitionTo(ProximityState.Locked, "OS session locked", -100);
                 StealthShieldDismissed?.Invoke(this, EventArgs.Empty);
             }
             else
             {
+                _sessionUnlockTime = DateTime.UtcNow;
                 _warningStartTime = null;
                 _awayStartTime = null;
-                TransitionTo(ProximityState.Present, "OS session unlocked", -60);
+                _gattDisconnectTime = null; // Clear stale disconnect timer from lock duration!
+                TransitionTo(ProximityState.Present, "OS session unlocked (cooldown grace active)", -60);
+                StealthShieldDismissed?.Invoke(this, EventArgs.Empty);
             }
         }
     }

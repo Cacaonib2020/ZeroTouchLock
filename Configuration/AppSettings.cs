@@ -40,6 +40,7 @@ public sealed class ThresholdsConfig
     public int WarningDurationMs { get; set; } = 2000;
     public int AwayDurationMs { get; set; } = 3500;
     public int UserInputGuardMs { get; set; } = 3000;
+    public int PostUnlockGraceMs { get; set; } = 10000;
 }
 
 public sealed class FeaturesConfig

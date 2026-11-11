@@ -56,6 +56,7 @@ public sealed class BleProximityMonitor : IDisposable
     private readonly AppSettings _settings;
     private readonly KalmanFilter1D _kalmanFilter;
     private readonly ProximityStateMachine _stateMachine;
+    private readonly ISessionMonitor _sessionMonitor;
     private readonly ILogger<BleProximityMonitor> _logger;
 
     private BluetoothLEAdvertisementWatcher? _watcher;
@@ -86,12 +87,16 @@ public sealed class BleProximityMonitor : IDisposable
         AppSettings settings,
         KalmanFilter1D kalmanFilter,
         ProximityStateMachine stateMachine,
+        ISessionMonitor sessionMonitor,
         ILogger<BleProximityMonitor> logger)
     {
         _settings = settings;
         _kalmanFilter = kalmanFilter;
         _stateMachine = stateMachine;
+        _sessionMonitor = sessionMonitor;
         _logger = logger;
+
+        _sessionMonitor.SessionLockStateChanged += OnSessionLockStateChanged;
     }
 
     /// <summary>
@@ -409,6 +414,25 @@ public sealed class BleProximityMonitor : IDisposable
         }
     }
 
+    private void OnSessionLockStateChanged(object? sender, bool isLocked)
+    {
+        if (isLocked)
+        {
+            _logger.LogInformation("Workstation session locked: suspending decay timer evaluations.");
+        }
+        else
+        {
+            _logger.LogInformation("Workstation session unlocked: resetting Kalman filter for clean re-acquisition.");
+            _kalmanFilter.Reset();
+
+            // Re-attempt GATT keep-alive reconnection if target was disconnected
+            if (!string.IsNullOrEmpty(_resolvedTargetDeviceId) && !IsTargetConnected)
+            {
+                _ = Task.Run(async () => await InitializeGattKeepAliveAsync(_resolvedTargetDeviceId));
+            }
+        }
+    }
+
     /// <summary>
     /// Periodic decay timer tick: if packets have stopped arriving for > SignalLossTimeoutMs,
     /// decays the estimated RSSI towards VirtualDecayRssi (-95 dBm) and updates State Machine.
@@ -416,6 +440,7 @@ public sealed class BleProximityMonitor : IDisposable
     private void OnDecayTimerTick(object? state)
     {
         if (_disposed) return;
+        if (_sessionMonitor.IsSessionLocked) return; // Never decay while workstation is already locked!
 
         DateTime now = DateTime.UtcNow;
         TimeSpan timeout = TimeSpan.FromMilliseconds(_settings.KalmanFilter.SignalLossTimeoutMs);
@@ -439,6 +464,7 @@ public sealed class BleProximityMonitor : IDisposable
         if (_disposed) return;
         _disposed = true;
 
+        _sessionMonitor.SessionLockStateChanged -= OnSessionLockStateChanged;
         _decayTimer?.Dispose();
 
         if (_watcher != null)

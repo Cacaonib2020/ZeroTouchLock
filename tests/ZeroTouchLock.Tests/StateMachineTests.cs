@@ -192,4 +192,47 @@ public class StateMachineTests
         _sessionMonitor.TriggerSessionLock(false);
         Assert.Equal(ProximityState.Present, sm.CurrentState);
     }
+
+    [Fact]
+    public void SessionUnlock_WithinGracePeriod_SuppressesAutoLockEvenWithLowRssi()
+    {
+        var sm = CreateStateMachine();
+        DateTime unlockTime = DateTime.UtcNow;
+
+        _sessionMonitor.TriggerSessionLock(true);
+        Assert.Equal(ProximityState.Locked, sm.CurrentState);
+
+        // PC unlocks at unlockTime
+        _sessionMonitor.TriggerSessionLock(false);
+        Assert.Equal(ProximityState.Present, sm.CurrentState);
+
+        // Even if RSSI is -95 dBm and user has been idle for 3.5 seconds,
+        // within the 10-second post-unlock grace period, auto-lock MUST be suppressed!
+        _activityGuard.IdleTime = TimeSpan.FromSeconds(5);
+        sm.Evaluate(-95.0, unlockTime.AddMilliseconds(3500));
+
+        Assert.Equal(0, _locker.LockCallCount);
+        Assert.Equal(ProximityState.Present, sm.CurrentState);
+    }
+
+    [Fact]
+    public void SessionUnlock_AfterGracePeriodExpires_ResumesNormalAwayLock()
+    {
+        var sm = CreateStateMachine();
+        DateTime unlockTime = DateTime.UtcNow;
+
+        _sessionMonitor.TriggerSessionLock(true);
+        _sessionMonitor.TriggerSessionLock(false);
+
+        _activityGuard.IdleTime = TimeSpan.FromSeconds(5);
+
+        // At 11 seconds (after 10s grace period), away timer starts at t=11s
+        sm.Evaluate(-85.0, unlockTime.AddSeconds(11));
+
+        // At 15 seconds (15 - 11 = 4.0s >= 3.5s away duration), lock triggers
+        sm.Evaluate(-85.0, unlockTime.AddSeconds(15));
+
+        Assert.Equal(1, _locker.LockCallCount);
+        Assert.Equal(ProximityState.Locked, sm.CurrentState);
+    }
 }
